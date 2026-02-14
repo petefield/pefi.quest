@@ -87,21 +87,12 @@ html, body {
 
 /* Scene display */
 .scene-image {
-    max-height: 33vh;
-    border-radius: 12px;
-    overflow: hidden;
-    margin: 0 auto 1rem auto;
+    float: right;
+    width: 255px;
+    margin: 0 0 0.75rem 1rem;
+    border-radius: 10px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     border: 1px solid #0f3460;
-    text-align: center;
-}
-
-.scene-image img {
-    max-width: 100%;
-    max-height: 33vh;
-    object-fit: contain;
-    display: block;
-    margin: 0 auto;
 }
 
 .scene-card {
@@ -113,10 +104,12 @@ html, body {
     line-height: 1.7;
     font-size: 1.1rem;
     box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    overflow: hidden;
 }
 
 .scene-description {
     white-space: pre-line;
+    display: inline;
 }
 
 /* Actions */
@@ -233,25 +226,26 @@ html, body {
 
 /* Image placeholder while generating */
 .scene-image-placeholder {
-    max-height: 33vh;
-    border-radius: 12px;
-    overflow: hidden;
-    margin: 0 auto 1rem auto;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    float: right;
+    width: 160px;
+    height: 160px;
+    margin: 0 0 0.75rem 1rem;
+    border-radius: 10px;
     border: 1px dashed #0f3460;
-    text-align: center;
-    padding: 2rem;
-    background: #16213e;
+    background: #0f1a30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .scene-image-placeholder .loading-spinner {
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
 }
 
 .scene-image-placeholder .loading-text {
     margin-top: 0.5rem;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
 }
 
 /* History */
@@ -260,20 +254,8 @@ html, body {
     margin-bottom: 1rem;
 }
 
-.history-image {
-    width: 100%;
-    height: 120px;
-    border-radius: 8px;
-    overflow: hidden;
-    margin-bottom: 0.5rem;
-    border: 1px solid #0f3460;
-}
-
-.history-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
+.history-scene .scene-image {
+    width: 100px;
 }
 
 .history-scene .scene-card {

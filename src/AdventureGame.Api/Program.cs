@@ -18,7 +18,7 @@ builder.Services.AddChatClient(openAiClient
 
 // DALL-E image generation
 builder.Services.AddSingleton(openAiClient.GetImageClient(
-    builder.Configuration["OpenAI:ImageModel"] ?? "dall-e-3"));
+    builder.Configuration["OpenAI:ImageModel"] ?? "dall-e-2"));
 
 builder.Services.AddSingleton<GameMasterService>();
 

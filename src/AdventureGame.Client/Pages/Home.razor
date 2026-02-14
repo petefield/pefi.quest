@@ -35,14 +35,12 @@
         @foreach (var entry in _history)
         {
             <div class="history-scene">
-                @if (!string.IsNullOrEmpty(entry.Scene.ImageUrl))
-                {
-                    <div class="history-image">
-                        <img src="@entry.Scene.ImageUrl" alt="Scene illustration" />
-                    </div>
-                }
                 <div class="scene-card">
-                    <div class="scene-description">@entry.Scene.Description</div>
+                    @if (!string.IsNullOrEmpty(entry.Scene.ImageUrl))
+                    {
+                        <img class="scene-image" src="@entry.Scene.ImageUrl" alt="Scene illustration" />
+                    }
+                    <span class="scene-description">@entry.Scene.Description</span>
                 </div>
                 @if (entry.ChosenAction is not null)
                 {
@@ -71,22 +69,18 @@
         }
         else if (_currentScene is not null)
         {
-            @if (!string.IsNullOrEmpty(_currentScene.ImageUrl))
-            {
-                <div class="scene-image">
-                    <img src="@_currentScene.ImageUrl" alt="Scene illustration" />
-                </div>
-            }
-            else if (_isLoadingImage)
-            {
-                <div class="scene-image-placeholder">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">Generating scene image...</div>
-                </div>
-            }
-
             <div class="scene-card">
-                <div class="scene-description">@_currentScene.Description</div>
+                @if (!string.IsNullOrEmpty(_currentScene.ImageUrl))
+                {
+                    <img class="scene-image" src="@_currentScene.ImageUrl" alt="Scene illustration" />
+                }
+                else if (_isLoadingImage)
+                {
+                    <div class="scene-image-placeholder">
+                        <div class="loading-spinner"></div>
+                    </div>
+                }
+                <span class="scene-description">@_currentScene.Description</span>
             </div>
 
             @if (_currentScene.IsGameOver)

@@ -334,8 +334,7 @@ public class GameMasterService
         {
             var options = new OpenAI.Images.ImageGenerationOptions
             {
-                Size = GeneratedImageSize.W1792xH1024,
-                Quality = GeneratedImageQuality.Standard,
+                Size = GeneratedImageSize.W256xH256,
                 ResponseFormat = GeneratedImageFormat.Uri
             };
 
