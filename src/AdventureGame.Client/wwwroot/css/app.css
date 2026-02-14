@@ -214,6 +214,46 @@ html, body {
     text-align: center;
 }
 
+/* Streaming cursor */
+.scene-description.streaming {
+    min-height: 1.5em;
+}
+
+.cursor {
+    display: inline;
+    animation: blink 0.7s step-end infinite;
+    color: #e6b800;
+    font-weight: bold;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Image placeholder while generating */
+.scene-image-placeholder {
+    max-height: 33vh;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 0 auto 1rem auto;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    border: 1px dashed #0f3460;
+    text-align: center;
+    padding: 2rem;
+    background: #16213e;
+}
+
+.scene-image-placeholder .loading-spinner {
+    width: 30px;
+    height: 30px;
+}
+
+.scene-image-placeholder .loading-text {
+    margin-top: 0.5rem;
+    font-size: 0.9rem;
+}
+
 /* History */
 .history-scene {
     opacity: 0.5;

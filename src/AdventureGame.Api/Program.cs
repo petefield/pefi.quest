@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AdventureGame.Api.Services;
 using AdventureGame.Shared;
 using Microsoft.Extensions.AI;
@@ -33,6 +34,8 @@ var app = builder.Build();
 
 app.UseCors();
 
+// --- Non-streaming endpoints (kept for backward compatibility) ---
+
 app.MapPost("/api/game/start", async (StartGameRequest request, GameMasterService gm, CancellationToken ct) =>
 {
     var response = await gm.StartGameAsync(request.Theme, ct);
@@ -49,6 +52,55 @@ app.MapPost("/api/game/action", async (ChooseActionRequest request, GameMasterSe
     catch (KeyNotFoundException ex)
     {
         return Results.NotFound(new { error = ex.Message });
+    }
+});
+
+// --- Streaming SSE endpoints ---
+
+app.MapPost("/api/game/start/stream", async (StartGameRequest request, GameMasterService gm, HttpContext httpContext, CancellationToken ct) =>
+{
+    httpContext.Response.ContentType = "text/event-stream";
+    httpContext.Response.Headers.CacheControl = "no-cache";
+    httpContext.Response.Headers.Connection = "keep-alive";
+
+    var (gameId, messages) = gm.PrepareStartGame(request.Theme);
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    await foreach (var streamEvent in gm.StreamSceneAsync(gameId, messages, ct))
+    {
+        var eventData = JsonSerializer.Serialize(streamEvent, jsonOptions);
+        await httpContext.Response.WriteAsync($"event: {streamEvent.Type}\n", ct);
+        await httpContext.Response.WriteAsync($"data: {eventData}\n\n", ct);
+        await httpContext.Response.Body.FlushAsync(ct);
+    }
+});
+
+app.MapPost("/api/game/action/stream", async (ChooseActionRequest request, GameMasterService gm, HttpContext httpContext, CancellationToken ct) =>
+{
+    httpContext.Response.ContentType = "text/event-stream";
+    httpContext.Response.Headers.CacheControl = "no-cache";
+    httpContext.Response.Headers.Connection = "keep-alive";
+
+    List<ChatMessage> messages;
+    try
+    {
+        messages = gm.PrepareAction(request.GameId, request.ActionId);
+    }
+    catch (KeyNotFoundException ex)
+    {
+        httpContext.Response.StatusCode = 404;
+        await httpContext.Response.WriteAsJsonAsync(new { error = ex.Message }, ct);
+        return;
+    }
+
+    var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+    await foreach (var streamEvent in gm.StreamSceneAsync(request.GameId, messages, ct))
+    {
+        var eventData = JsonSerializer.Serialize(streamEvent, jsonOptions);
+        await httpContext.Response.WriteAsync($"event: {streamEvent.Type}\n", ct);
+        await httpContext.Response.WriteAsync($"data: {eventData}\n\n", ct);
+        await httpContext.Response.Body.FlushAsync(ct);
     }
 });
 

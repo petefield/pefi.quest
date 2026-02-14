@@ -1,6 +1,9 @@
 @page "/"
+@using System.Text.Json
 @using AdventureGame.Shared
 @inject HttpClient Http
+@inject IJSRuntime JS
+@implements IDisposable
 
 <div class="game-container">
     <h1 class="game-title">Quest</h1>
@@ -27,14 +30,6 @@
         <div class="error-message">@_error</div>
     }
 
-    @if (_state == GameState.Loading)
-    {
-        <div class="loading">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">The Game Master is crafting your fate...</div>
-        </div>
-    }
-
     @if (_state == GameState.Playing || _state == GameState.GameOver)
     {
         @foreach (var entry in _history)
@@ -56,12 +51,37 @@
             </div>
         }
 
-        @if (_currentScene is not null)
+        @* Streaming text / current scene *@
+        @if (_isStreaming && !string.IsNullOrEmpty(_streamingDescription))
+        {
+            <div class="scene-card">
+                <div class="scene-description streaming">@_streamingDescription<span class="cursor">|</span></div>
+            </div>
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">The story unfolds...</div>
+            </div>
+        }
+        else if (_isStreaming && string.IsNullOrEmpty(_streamingDescription))
+        {
+            <div class="loading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">The Game Master is crafting your fate...</div>
+            </div>
+        }
+        else if (_currentScene is not null)
         {
             @if (!string.IsNullOrEmpty(_currentScene.ImageUrl))
             {
                 <div class="scene-image">
                     <img src="@_currentScene.ImageUrl" alt="Scene illustration" />
+                </div>
+            }
+            else if (_isLoadingImage)
+            {
+                <div class="scene-image-placeholder">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">Generating scene image...</div>
                 </div>
             }
 
@@ -90,14 +110,14 @@
                     }
                 </div>
             }
-            else
-            {
-                <div class="loading">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">The story unfolds...</div>
-                </div>
-            }
         }
+    }
+    else if (_state == GameState.Loading)
+    {
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">The Game Master is crafting your fate...</div>
+        </div>
     }
 </div>
 
@@ -109,10 +129,30 @@
     private string? _gameId;
     private GameScene? _currentScene;
     private bool _isLoading;
+    private bool _isStreaming;
+    private bool _isLoadingImage;
+    private string _streamingDescription = "";
     private string? _error;
     private readonly List<HistoryEntry> _history = [];
+    private DotNetObjectReference<Home>? _dotNetRef;
+    private TaskCompletionSource? _streamTcs;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
     private record HistoryEntry(GameScene Scene, string? ChosenAction);
+
+    protected override void OnInitialized()
+    {
+        _dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    public void Dispose()
+    {
+        _dotNetRef?.Dispose();
+    }
 
     private async Task OnThemeKeyDown(KeyboardEventArgs e)
     {
@@ -123,32 +163,33 @@
     private async Task StartGame()
     {
         _error = null;
-        _state = GameState.Loading;
+        _state = GameState.Playing;
         _isLoading = true;
+        _isStreaming = true;
+        _streamingDescription = "";
+        _currentScene = null;
         _history.Clear();
 
         try
         {
-            var request = new StartGameRequest { Theme = _theme };
-            var response = await Http.PostAsJsonAsync("api/game/start", request);
-            response.EnsureSuccessStatusCode();
+            var body = JsonSerializer.Serialize(new StartGameRequest { Theme = _theme });
+            var baseUri = Http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+            var url = $"{baseUri}/api/game/start/stream";
 
-            var result = await response.Content.ReadFromJsonAsync<GameResponse>();
-            if (result is null)
-                throw new Exception("Empty response from server.");
-
-            _gameId = result.GameId;
-            _currentScene = result.Scene;
-            _state = result.Scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+            _streamTcs = new TaskCompletionSource();
+            await JS.InvokeVoidAsync("sseInterop.fetchSse", url, body, _dotNetRef);
+            await _streamTcs.Task;
         }
         catch (Exception ex)
         {
             _error = $"Failed to start game: {ex.Message}";
             _state = GameState.Start;
+            _isStreaming = false;
         }
         finally
         {
             _isLoading = false;
+            StateHasChanged();
         }
     }
 
@@ -158,22 +199,22 @@
 
         _error = null;
         _isLoading = true;
+        _isStreaming = true;
+        _streamingDescription = "";
 
         // Move current scene to history
         _history.Add(new HistoryEntry(_currentScene, action.Text));
+        _currentScene = null;
 
         try
         {
-            var request = new ChooseActionRequest { GameId = _gameId, ActionId = action.Id };
-            var response = await Http.PostAsJsonAsync("api/game/action", request);
-            response.EnsureSuccessStatusCode();
+            var body = JsonSerializer.Serialize(new ChooseActionRequest { GameId = _gameId, ActionId = action.Id });
+            var baseUri = Http.BaseAddress?.ToString().TrimEnd('/') ?? "";
+            var url = $"{baseUri}/api/game/action/stream";
 
-            var result = await response.Content.ReadFromJsonAsync<GameResponse>();
-            if (result is null)
-                throw new Exception("Empty response from server.");
-
-            _currentScene = result.Scene;
-            _state = result.Scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+            _streamTcs = new TaskCompletionSource();
+            await JS.InvokeVoidAsync("sseInterop.fetchSse", url, body, _dotNetRef);
+            await _streamTcs.Task;
         }
         catch (Exception ex)
         {
@@ -182,7 +223,69 @@
         finally
         {
             _isLoading = false;
+            StateHasChanged();
         }
+    }
+
+    [JSInvokable]
+    public void OnSseEvent(string eventType, string data)
+    {
+        var streamEvent = JsonSerializer.Deserialize<StreamEvent>(data, JsonOptions);
+        if (streamEvent is null) return;
+
+        switch (eventType)
+        {
+            case "text":
+                _streamingDescription += streamEvent.Data;
+                _gameId ??= streamEvent.GameId;
+                InvokeAsync(StateHasChanged);
+                break;
+
+            case "scene":
+                _isStreaming = false;
+                _isLoading = false;
+                _isLoadingImage = true;
+                var scene = JsonSerializer.Deserialize<GameScene>(streamEvent.Data, JsonOptions);
+                if (scene is not null)
+                {
+                    _gameId = streamEvent.GameId;
+                    _currentScene = scene;
+                    _state = scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+                }
+                _streamingDescription = "";
+                InvokeAsync(StateHasChanged);
+                break;
+
+            case "image":
+                if (_currentScene is not null)
+                {
+                    _currentScene = _currentScene with { ImageUrl = streamEvent.Data };
+                }
+                _isLoadingImage = false;
+                InvokeAsync(StateHasChanged);
+                break;
+        }
+    }
+
+    [JSInvokable]
+    public void OnSseComplete()
+    {
+        _isStreaming = false;
+        _isLoadingImage = false;
+        _streamTcs?.TrySetResult();
+        InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public void OnSseError(string errorMessage)
+    {
+        _error = $"Streaming error: {errorMessage}";
+        _isStreaming = false;
+        _isLoadingImage = false;
+        if (_currentScene is null && _history.Count == 0)
+            _state = GameState.Start;
+        _streamTcs?.TrySetException(new Exception(errorMessage));
+        InvokeAsync(StateHasChanged);
     }
 
     private void Reset()
@@ -192,6 +295,9 @@
         _currentScene = null;
         _theme = null;
         _error = null;
+        _isStreaming = false;
+        _isLoadingImage = false;
+        _streamingDescription = "";
         _history.Clear();
     }
 }
