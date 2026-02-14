@@ -1,0 +1,22 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: src/AdventureGame.Api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      - OpenAI__ApiKey=${OPENAI_API_KEY}
+      - OpenAI__Model=${OPENAI_MODEL:-gpt-4o-mini}
+      - OpenAI__ImageModel=${OPENAI_IMAGE_MODEL:-dall-e-3}
+    expose:
+      - "8080"
+
+  client:
+    build:
+      context: .
+      dockerfile: src/AdventureGame.Client/Dockerfile
+    ports:
+      - "8080:80"
+    depends_on:
+      - api

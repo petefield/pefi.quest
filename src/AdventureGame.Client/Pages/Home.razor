@@ -1,0 +1,197 @@
+@page "/"
+@using AdventureGame.Shared
+@inject HttpClient Http
+
+<div class="game-container">
+    <h1 class="game-title">Quest</h1>
+    <p class="game-subtitle">An AI-Powered Adventure</p>
+
+    @if (_state == GameState.Start)
+    {
+        <div class="start-screen">
+            <p>Enter a theme for your adventure, or leave blank for a surprise.</p>
+            <input class="theme-input"
+                   @bind="_theme"
+                   @bind:event="oninput"
+                   placeholder="e.g. haunted castle, space station, pirate ship..."
+                   @onkeydown="OnThemeKeyDown" />
+            <br />
+            <button class="btn-start" @onclick="StartGame" disabled="@_isLoading">
+                Begin Adventure
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="error-message">@_error</div>
+    }
+
+    @if (_state == GameState.Loading)
+    {
+        <div class="loading">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">The Game Master is crafting your fate...</div>
+        </div>
+    }
+
+    @if (_state == GameState.Playing || _state == GameState.GameOver)
+    {
+        @foreach (var entry in _history)
+        {
+            <div class="history-scene">
+                @if (!string.IsNullOrEmpty(entry.Scene.ImageUrl))
+                {
+                    <div class="history-image">
+                        <img src="@entry.Scene.ImageUrl" alt="Scene illustration" />
+                    </div>
+                }
+                <div class="scene-card">
+                    <div class="scene-description">@entry.Scene.Description</div>
+                </div>
+                @if (entry.ChosenAction is not null)
+                {
+                    <div class="history-action">You chose: @entry.ChosenAction</div>
+                }
+            </div>
+        }
+
+        @if (_currentScene is not null)
+        {
+            @if (!string.IsNullOrEmpty(_currentScene.ImageUrl))
+            {
+                <div class="scene-image">
+                    <img src="@_currentScene.ImageUrl" alt="Scene illustration" />
+                </div>
+            }
+
+            <div class="scene-card">
+                <div class="scene-description">@_currentScene.Description</div>
+            </div>
+
+            @if (_currentScene.IsGameOver)
+            {
+                <div class="game-over">
+                    <div class="game-over-text">The adventure has ended.</div>
+                    <button class="btn-start" @onclick="Reset">Play Again</button>
+                </div>
+            }
+            else if (!_isLoading)
+            {
+                <div class="actions-header">What do you do?</div>
+                <div class="action-list">
+                    @foreach (var action in _currentScene.Actions)
+                    {
+                        <button class="btn-action"
+                                @onclick="() => ChooseAction(action)"
+                                disabled="@_isLoading">
+                            <span class="action-number">@action.Id.</span> @action.Text
+                        </button>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="loading">
+                    <div class="loading-spinner"></div>
+                    <div class="loading-text">The story unfolds...</div>
+                </div>
+            }
+        }
+    }
+</div>
+
+@code {
+    private enum GameState { Start, Loading, Playing, GameOver }
+
+    private GameState _state = GameState.Start;
+    private string? _theme;
+    private string? _gameId;
+    private GameScene? _currentScene;
+    private bool _isLoading;
+    private string? _error;
+    private readonly List<HistoryEntry> _history = [];
+
+    private record HistoryEntry(GameScene Scene, string? ChosenAction);
+
+    private async Task OnThemeKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            await StartGame();
+    }
+
+    private async Task StartGame()
+    {
+        _error = null;
+        _state = GameState.Loading;
+        _isLoading = true;
+        _history.Clear();
+
+        try
+        {
+            var request = new StartGameRequest { Theme = _theme };
+            var response = await Http.PostAsJsonAsync("api/game/start", request);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<GameResponse>();
+            if (result is null)
+                throw new Exception("Empty response from server.");
+
+            _gameId = result.GameId;
+            _currentScene = result.Scene;
+            _state = result.Scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to start game: {ex.Message}";
+            _state = GameState.Start;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ChooseAction(GameAction action)
+    {
+        if (_gameId is null || _currentScene is null) return;
+
+        _error = null;
+        _isLoading = true;
+
+        // Move current scene to history
+        _history.Add(new HistoryEntry(_currentScene, action.Text));
+
+        try
+        {
+            var request = new ChooseActionRequest { GameId = _gameId, ActionId = action.Id };
+            var response = await Http.PostAsJsonAsync("api/game/action", request);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<GameResponse>();
+            if (result is null)
+                throw new Exception("Empty response from server.");
+
+            _currentScene = result.Scene;
+            _state = result.Scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to process action: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _state = GameState.Start;
+        _gameId = null;
+        _currentScene = null;
+        _theme = null;
+        _error = null;
+        _history.Clear();
+    }
+}

@@ -1,0 +1,16 @@
+**/bin/
+**/obj/
+**/out/
+**/.vs/
+**/.vscode/
+**/node_modules/
+**/*.user
+**/*.suo
+**/Thumbs.db
+**/.DS_Store
+.git/
+.gitignore
+*.md
+docker-compose*.yml
+.dockerignore
+.env
