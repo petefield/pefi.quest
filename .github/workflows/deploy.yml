@@ -97,9 +97,40 @@ jobs:
             --redirect-provider Google
 
       - name: Show app URL
+        id: app-url
         run: |
           FQDN=$(az containerapp show \
             --name ${{ env.CONTAINER_APP }} \
             --resource-group ${{ env.RESOURCE_GROUP }} \
             --query "properties.configuration.ingress.fqdn" -o tsv)
           echo "App deployed to: https://${FQDN}"
+          echo "fqdn=${FQDN}" >> "$GITHUB_OUTPUT"
+
+      - name: Notify via WhatsApp
+        if: always()
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_WHATSAPP_FROM: ${{ secrets.TWILIO_WHATSAPP_FROM }}
+          TWILIO_WHATSAPP_TO: ${{ secrets.TWILIO_WHATSAPP_TO }}
+        run: |
+          if [ -z "$TWILIO_ACCOUNT_SID" ]; then
+            echo "Twilio secrets not configured, skipping notification"
+            exit 0
+          fi
+
+          STATUS="${{ job.status }}"
+          FQDN="${{ steps.app-url.outputs.fqdn }}"
+          COMMIT="${GITHUB_SHA::7}"
+          MSG="pefi.quest deployment ${STATUS}"$'\n'"Commit: ${COMMIT}"
+
+          if [ "$STATUS" = "success" ]; then
+            MSG="${MSG}"$'\n'"URL: https://${FQDN}"
+          fi
+
+          curl -s -X POST \
+            "https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json" \
+            -u "${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}" \
+            --data-urlencode "From=whatsapp:${TWILIO_WHATSAPP_FROM}" \
+            --data-urlencode "To=whatsapp:${TWILIO_WHATSAPP_TO}" \
+            --data-urlencode "Body=${MSG}"
