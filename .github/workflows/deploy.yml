@@ -80,6 +80,22 @@ jobs:
                 OpenAI__ImageModel=dall-e-2
           fi
 
+      - name: Configure Google authentication
+        run: |
+          az containerapp auth google update \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --client-id "${{ secrets.GOOGLE_CLIENT_ID }}" \
+            --client-secret "${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+            --scopes "openid profile email" \
+            --yes
+
+          az containerapp auth update \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --unauthenticated-client-action RedirectToLoginPage \
+            --redirect-provider Google
+
       - name: Show app URL
         run: |
           FQDN=$(az containerapp show \
