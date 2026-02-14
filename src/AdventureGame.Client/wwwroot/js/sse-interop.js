@@ -83,3 +83,10 @@ window.sseInterop = {
         }
     }
 };
+
+window.scrollToElement = function (elementId) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+};

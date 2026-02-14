@@ -1,0 +1,89 @@
+name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+
+env:
+  ACR_NAME: thefields
+  IMAGE_NAME: thefields.azurecr.io/pefi-quest
+  RESOURCE_GROUP: DefaultResourceGroup-SUK
+  CONTAINER_APP: pefi-quest
+  CONTAINER_APP_ENV: managedEnvironment-DefaultResource-b8ac
+  LOCATION: uksouth
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_NAME }}
+
+      - name: Build and push image
+        run: |
+          TAG=${GITHUB_SHA::7}
+          docker build -t ${{ env.IMAGE_NAME }}:${TAG} -t ${{ env.IMAGE_NAME }}:latest .
+          docker push ${{ env.IMAGE_NAME }}:${TAG}
+          docker push ${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy to Container App
+        run: |
+          TAG=${GITHUB_SHA::7}
+
+          # Check if the container app already exists
+          EXISTS=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "name" -o tsv 2>/dev/null || echo "")
+
+          if [ -z "$EXISTS" ]; then
+            echo "Creating new container app..."
+            az containerapp create \
+              --name ${{ env.CONTAINER_APP }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --environment ${{ env.CONTAINER_APP_ENV }} \
+              --image ${{ env.IMAGE_NAME }}:${TAG} \
+              --target-port 80 \
+              --ingress external \
+              --registry-server ${{ env.ACR_NAME }}.azurecr.io \
+              --registry-username ${{ secrets.REGISTRY_USERNAME }} \
+              --registry-password ${{ secrets.REGISTRY_PASSWORD }} \
+              --secrets openai-api-key="${{ secrets.OPENAI_API_KEY }}" \
+              --env-vars \
+                OpenAI__ApiKey=secretref:openai-api-key \
+                OpenAI__Model=gpt-4o-mini \
+                OpenAI__ImageModel=dall-e-2 \
+              --min-replicas 0 \
+              --max-replicas 1
+          else
+            echo "Updating existing container app..."
+            az containerapp secret set \
+              --name ${{ env.CONTAINER_APP }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --secrets openai-api-key="${{ secrets.OPENAI_API_KEY }}"
+
+            az containerapp update \
+              --name ${{ env.CONTAINER_APP }} \
+              --resource-group ${{ env.RESOURCE_GROUP }} \
+              --image ${{ env.IMAGE_NAME }}:${TAG} \
+              --set-env-vars \
+                OpenAI__ApiKey=secretref:openai-api-key \
+                OpenAI__Model=gpt-4o-mini \
+                OpenAI__ImageModel=dall-e-2
+          fi
+
+      - name: Show app URL
+        run: |
+          FQDN=$(az containerapp show \
+            --name ${{ env.CONTAINER_APP }} \
+            --resource-group ${{ env.RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          echo "App deployed to: https://${FQDN}"

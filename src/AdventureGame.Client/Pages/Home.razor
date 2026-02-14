@@ -103,6 +103,7 @@
                         </button>
                     }
                 </div>
+                <div id="actions-end"></div>
             }
         }
     }
@@ -130,6 +131,7 @@
     private readonly List<HistoryEntry> _history = [];
     private DotNetObjectReference<Home>? _dotNetRef;
     private TaskCompletionSource? _streamTcs;
+    private bool _scrollToActions;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -141,6 +143,15 @@
     protected override void OnInitialized()
     {
         _dotNetRef = DotNetObjectReference.Create(this);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollToActions)
+        {
+            _scrollToActions = false;
+            await JS.InvokeVoidAsync("scrollToElement", "actions-end");
+        }
     }
 
     public void Dispose()
@@ -245,6 +256,7 @@
                     _gameId = streamEvent.GameId;
                     _currentScene = scene;
                     _state = scene.IsGameOver ? GameState.GameOver : GameState.Playing;
+                    _scrollToActions = !scene.IsGameOver;
                 }
                 _streamingDescription = "";
                 InvokeAsync(StateHasChanged);
