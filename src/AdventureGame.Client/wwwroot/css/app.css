@@ -1,3 +1,7 @@
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
 html, body {
     margin: 0;
     padding: 0;
@@ -269,6 +273,78 @@ html, body {
     margin: 0.5rem 0;
     padding-left: 1rem;
     border-left: 2px solid #e6b800;
+}
+
+/* Responsive - mobile */
+@media (max-width: 600px) {
+    .game-container {
+        margin: 1rem auto;
+        padding: 0.5rem 1rem;
+    }
+
+    .game-title {
+        font-size: 1.75rem;
+    }
+
+    .game-subtitle {
+        margin-bottom: 1.25rem;
+        font-size: 0.9rem;
+    }
+
+    .scene-card {
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+
+    .scene-image {
+        float: none;
+        display: block;
+        width: 100%;
+        max-width: 256px;
+        margin: 0 auto 1rem auto;
+        border-radius: 8px;
+    }
+
+    .scene-image-placeholder {
+        float: none;
+        display: flex;
+        width: 100%;
+        max-width: 200px;
+        height: 120px;
+        margin: 0 auto 1rem auto;
+    }
+
+    .history-scene .scene-image {
+        width: 100%;
+        max-width: 160px;
+    }
+
+    .history-scene .scene-card {
+        padding: 0.75rem 1rem;
+        font-size: 0.9rem;
+    }
+
+    .btn-action {
+        padding: 1rem 1.25rem;
+        font-size: 1rem;
+    }
+
+    .btn-start {
+        padding: 0.85rem 2rem;
+        font-size: 1.1rem;
+        width: 100%;
+        max-width: 300px;
+    }
+
+    .theme-input {
+        max-width: 100%;
+        font-size: 1rem;
+    }
+
+    .game-over-text {
+        font-size: 1.25rem;
+    }
 }
 
 /* Blazor defaults - keep */
